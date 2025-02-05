@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Security Warning</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+            background-color: #fff3cd;
+        }
+        .warning-box {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .warning-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        .url-display {
+            word-break: break-all;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        .button-group {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #proceed-btn {
+            background-color: #dc3545;
+            color: white;
+        }
+        #cancel-btn {
+            background-color: #6c757d;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="warning-box">
+        <div class="warning-icon">⚠️</div>
+        <h2>Security Warning</h2>
+        <p>This URL has been flagged as potentially unsafe:</p>
+        <div id="url-display" class="url-display"></div>
+        <p>Do you want to proceed in a secure container?</p>
+        <div class="button-group">
+            <button id="proceed-btn">Open in Secure Container</button>
+            <button id="cancel-btn">Cancel</button>
+        </div>
+    </div>
+    <script src="warning.js"></script>
+</body>
+</html>
