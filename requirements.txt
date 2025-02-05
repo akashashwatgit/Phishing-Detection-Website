@@ -1,5 +1,7 @@
-streamlit
+Flask
+Flask-CORS
 numpy
 scikit-learn
 requests
 datetime
+
