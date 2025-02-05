@@ -1,13 +1,21 @@
-import streamlit as st
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import numpy as np
 import pickle
 from urllib.parse import urlparse
 import requests
-from urllib.parse import urlparse
-from datetime import datetime
 import re
+import ipaddress
+from datetime import datetime
+import logging
 from requests.exceptions import SSLError, Timeout  # Add this import for SSLError and Timeout
+# Initialize Flask app
+app = Flask(__name__)
+CORS(app)
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def get_domain(url):  
     domain = urlparse(url).netloc
@@ -219,5 +227,50 @@ def main():
 
             st.success("No Phishing Detected. This URL seems safe.")
     
+app.route('/api/check-url', methods=['POST'])
+def check_url():
+    try:
+        data = request.get_json()
+        if not data or 'url' not in data:
+            return jsonify({'error': 'URL is required'}), 400
+
+        url = data['url']
+        logger.info(f"Checking URL: {url}")
+
+        # Extract features
+        features = extract_features(url)
+        
+        # Make prediction
+        prediction = predict_phishing(features)
+        
+        # Prepare feature names for response
+        feature_names = [
+            'has_ip', 'has_at', 'url_length', 'url_depth', 
+            'redirection', 'https_domain', 'tiny_url', 
+            'prefix_suffix', 'dns', 'dns_age', 'dns_end',
+            'web_traffic', 'iframe', 'mouse_over', 
+            'right_click', 'forwarding'
+        ]
+        
+        # Create feature dictionary
+        feature_dict = dict(zip(feature_names, features))
+        
+        response = {
+            'url': url,
+            'is_phishing': bool(prediction[0] == 0),
+            'features': feature_dict,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(response)
+
+    except Exception as e:
+        logger.error(f"Error processing request: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    return jsonify({'status': 'healthy'})
+
 if __name__ == '__main__':
-    main()
+    app.run(host='0.0.0.0', port=5000)
