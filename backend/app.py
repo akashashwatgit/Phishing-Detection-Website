@@ -1,47 +1,98 @@
 from flask import Flask, request, jsonify
+import numpy as np
+import pickle
+from urllib.parse import urlparse
 import requests
-from functools import wraps
+import re
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for browser extension support
 
-# Configuration
-ML_SERVICE_URL = "http://localhost:5000/predict"  # Corrected ML service URL
+# Load ML model
+MODEL_PATH = "mlp_model.pkl"  # Change to "XGBoostClassifier.pickle.dat" if needed
+with open(MODEL_PATH, "rb") as file:
+    model = pickle.load(file)
 
-def handle_errors(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        try:
-            return f(*args, **kwargs)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-    return wrapper
+# Feature extraction functions
+def have_at_sign(url):
+    return 1 if "@" in url else 0
 
-@app.route('/verify-url', methods=['POST'])
-@handle_errors
-def verify_url():
-    data = request.get_json()
-    url = data.get('url')
-    
-    if not url:
-        return jsonify({"error": "URL is required"}), 400
-    
-    # Call ML service to verify URL
+def get_length(url):
+    return 1 if len(url) >= 54 else 0
+
+def get_depth(url):
+    return len([s for s in urlparse(url).path.split('/') if s])
+
+def redirection(url):
+    return 1 if url.rfind("//") > 7 else 0
+
+def http_domain(url):
+    return 1 if "https" in urlparse(url).netloc else 0
+
+def tiny_url(url):
+    shortening_services = r"bit\.ly|goo\.gl|t\.co|tinyurl|shorte\.st|tr\.im"
+    return 1 if re.search(shortening_services, url) else 0
+
+def prefix_suffix(url):
+    return 1 if '-' in urlparse(url).netloc else 0 
+
+def web_traffic(url):
     try:
-        ml_response = requests.post(
-            ML_SERVICE_URL,
-            json={"url": url},
-            timeout=30
+        response = requests.get(
+            "https://similar-web.p.rapidapi.com/get-analysis",
+            headers={"X-RapidAPI-Key": "your_api_key"},
+            params={"domain": url},
+            timeout=5
         )
-        ml_response.raise_for_status()
-        prediction = ml_response.json()
-        
-        return jsonify({
-            "status": "safe" if not prediction.get("phishing", True) else "unsafe",
-            "url": url
-        })
-            
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"ML service error: {str(e)}"}), 503
+        rank = int(response.json().get("GlobalRank", {}).get("Rank", 1))
+    except:
+        rank = 1
+    return 1 if rank < 100000 else 0
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+def get_http_response(url):
+    try:
+        return requests.get(url, timeout=5)
+    except:
+        return None
+
+def extract_features(url):
+    features = [
+        have_at_sign(url),
+        get_length(url),
+        get_depth(url),
+        redirection(url),
+        http_domain(url),
+        tiny_url(url),
+        prefix_suffix(url),
+        web_traffic(url),
+    ]
+
+    response = get_http_response(url)
+    if response:
+        features.extend([
+            1 if re.search("<iframe>|<frameBorder>", response.text) else 0,
+            1 if re.search("<script>.+onmouseover.+</script>", response.text) else 0,
+            1 if "event.button == 2" in response.text else 0,
+            1 if len(response.history) > 2 else 0,
+        ])
+    else:
+        features.extend([0, 0, 0, 0])
+
+    return features
+
+@app.route("/predict", methods=["POST"])
+def predict():
+    data = request.json
+    url = data.get("url")
+
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+
+    features = extract_features(url)
+    prediction = model.predict(np.array([features]))[0]
+    
+    return jsonify({"is_safe": bool(prediction == 1)})
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
